@@ -97,6 +97,56 @@ describe('smtp imposter', function () {
         });
     });
 
+    describe('Quote Printable problem', function () {
+        promiseIt('should provide mail body back correctly', function () {
+            const imposterRequest = { protocol: 'smtp', port };
+
+            return api.post('/imposters', imposterRequest)
+                .then(() => client.send({
+                    envelopeFrom: 'envelopeFrom1@mb.org',
+                    envelopeTo: ['envelopeTo1@mb.org'],
+                    from: '"From 1" <from1@mb.org>',
+                    to: ['"To 1" <to1@mb.org>'],
+                    textEncoding: 'quoted-printable',
+                    subject: 'subject 1',
+                    text: 'In this grand sentence, the next period will be exactly the 75th character.=\r\n Foo\r\n'
+                }, port))
+                .then(() => api.get(`/imposters/${port}`))
+                .then(response => {
+                    const requests = response.body.requests;
+                    requests.forEach(request => {
+                        if (request.requestFrom) {
+                            request.requestFrom = 'HERE';
+                        }
+                        if (request.timestamp) {
+                            request.timestamp = 'NOW';
+                        }
+                    });
+                    assert.deepEqual(requests, [
+                        {
+                            timestamp: 'NOW',
+                            requestFrom: 'HERE',
+                            envelopeFrom: 'envelopeFrom1@mb.org',
+                            envelopeTo: ['envelopeTo1@mb.org'],
+                            from: { address: 'from1@mb.org', name: 'From 1' },
+                            to: [{ address: 'to1@mb.org', name: 'To 1' }],
+                            cc: [],
+                            bcc: [],
+                            subject: 'subject 1',
+                            priority: 'normal',
+                            references: [],
+                            inReplyTo: [],
+                            ip: '127.0.0.1',
+                            text: 'In this grand sentence, the next period will be exactly the 75th character. Foo',
+                            html: '',
+                            attachments: []
+                        },
+                    ]);
+                })
+                .finally(() => api.del('/imposters'));
+        });
+    });
+
     describe('DELETE /imposters/:id should shutdown server at that port', function () {
         promiseIt('should shutdown server at that port', function () {
             const request = { protocol: 'smtp', port };
